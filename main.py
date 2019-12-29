@@ -1,10 +1,11 @@
 import ftplib
 import sys
 import os
-try:
-  os.mkdir('Downloads')
-except FileExistsError:
-  None
+from pathlib import Path
+from gi.repository import GLib
+from termcolor import colored
+import shutil
+downloads = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD)
 from progressbar import AnimatedMarker, Bar, BouncingBar, Counter, ETA, \
     AdaptiveETA, FileTransferSpeed, FormatLabel, Percentage, \
     ProgressBar, ReverseBar, RotatingMarker, \
@@ -13,20 +14,19 @@ localfile = None
 pbar = None
 def grabFile(filename):
   global localfile, pbar
-  widgets = ['Downloading: ', Percentage(), ' ',Bar(marker=">",left='[',right=']'),' ' , ETA(), ' ', FileTransferSpeed()]
+  widgets = ['Downloading: ', Percentage(),Bar(marker='#',left='[',right=']'),' ' , ETA(), ' ', FileTransferSpeed()]
   pbar = ProgressBar(widgets=widgets, maxval=ftp.size(filename))
   pbar.start() 
-  localfile = open(f"Downloads/{filename}", 'wb')
+  localfile = open(f"{downloads}/{filename}", 'wb')
   def file_write(data):
     global localfile, pbar
     localfile.write(data)
     pbar += len(data)
-
-
-  ftp.retrbinary('RETR ' + filename, file_write, 1024)
-
+  try:
+    ftp.retrbinary('RETR ' + filename, file_write, 1024)
+  except:
+    print("Download FAILED")
   localfile.close()
-
 
 
 host = sys.argv[1]
@@ -40,7 +40,7 @@ if  len(sys.argv) ==  4:
 else:
   uname = "anonymous"
   passwd = ""
-print(f"Connecting to {host} as {uname}")
+print(f"Connecting to {host} as {uname}...")
 ftp = ftplib.FTP_TLS(host)
 ftp.sendcmd(f"USER {uname}")
 ftp.sendcmd(f"PASS {passwd}")
@@ -71,5 +71,30 @@ while True:
   elif command[0] == 'grab':
     if len(command) < 2:
       continue
-    print(f"Size of {command[1]} is {ftp.size(command[1])}")
-    grabFile(command[1])
+    try:
+      grabFile(command[1])
+    except ftplib.error_perm as err:
+      e = str(err)
+      print(e)
+      if e.startswith('550'):
+        print(f"Could not grab \"{command[1]}\" from server: No such file or directory (* does not work)")
+        continue
+  elif command[0] == 'help':
+    print('exit: Close the FTP session\nls: list files in the present working directory\ncd: change to the specified directory\ngrab: download the specified file to the Downloads folder')
+  elif command[0] == 'find':
+    files = []
+    found = []
+    ftp.dir(files.append)
+    search = []
+    for item in files:
+      search.append(item)
+      if command[1] in item:
+        found.append(item)
+    if len(found) < 1:
+      print(f"{command[1]}: no such file or directory")
+      continue
+    for item in found:
+      item = item.split(command[1])
+      print(item[0] + colored(command[1],'red') + item[1])
+  else:
+    print(f"{command[0]}: command not found")
